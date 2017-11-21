@@ -9,7 +9,7 @@ Author        :TensorFlow
 Comment Adder :王振荟
 """
 import tensorflow as tf
-import reader.Test as data_set
+import reader.data_set as data_set
 
 """
 根据给定的维度参数，初始化weight，正态分布随机
