@@ -10,6 +10,8 @@ import numpy as np
 
 CONTENT_LAYERS = ['block1_conv2']
 STYLE_LAYERS = ['block1_conv2', 'block2_conv2', 'block3_conv2']
+CONTENT_RATE = 1
+STYLE_RATE = 0.2
 
 
 def weight_variable(shape):
@@ -30,7 +32,7 @@ def get_style_loss(middle_feature, style_feature):
     style_feature_reshape = tf.reshape(style_feature, shape=[-1, channel])
     middle_gram = tf.matmul(tf.transpose(middle_feature_reshape), middle_feature_reshape) / size
     style_gram = tf.matmul(tf.transpose(style_feature_reshape), style_feature_reshape) / size
-    style_loss = tf.nn.l2_loss(middle_gram - style_gram)
+    style_loss = tf.nn.l2_loss(middle_gram - style_gram) / size
     return style_loss
 
 
@@ -54,10 +56,6 @@ def get_nontrainable_model(name, model_origin):
     return non_trainable_model
 
 
-def get_loss(origin_feature, style_feature, middle_feature):
-    c_loss = get_content_loss(middle_feature, origin_feature)
-    s_loss = get_style_loss(middle_feature, style_feature)
-    return c_loss, s_loss
 
 
 def get_feature(model_vgg, layer_name, input_origin_or_style, input_middle):
@@ -73,11 +71,11 @@ with tf.Session() as sess:
     tf.set_random_seed(1)
     # read data
     input_origin = reader.load_img(r"./data/dog.png")  # 1,224,224,3
-    input_style = reader.load_img(r"./data/style.png")  # 1,224,224,3
+    input_style = reader.load_img(r"./data/star.jpg")  # 1,224,224,3
     input_origin_tensor = tf.constant(input_origin, dtype=tf.float32) / 256
     input_style_tensor = tf.constant(input_style, dtype=tf.float32) / 256
     input_middle = weight_variable(shape=input_origin.shape)
-
+    input_middle = tf.nn.relu(input_middle)
     # cnn model
     model_vgg = VGG19(weights='imagenet')
     # for l in model_vgg.layers :
@@ -91,19 +89,19 @@ with tf.Session() as sess:
 
     for name in STYLE_LAYERS:
         style_feature, middle_feature = get_feature(model_vgg, name, input_style, input_middle)
-        style_loss = get_content_loss(middle_feature, style_feature)
+        style_loss = get_style_loss(middle_feature, style_feature)
         style_loss_sum += style_loss
 
-    loss = style_loss_sum + content_loss_sum
+    loss = STYLE_RATE * style_loss_sum + content_loss_sum * CONTENT_RATE
     # loss = c_loss_1 + s_loss_1
-    train_step = tf.train.AdamOptimizer(0.01).minimize(loss)
+    train_step = tf.train.AdamOptimizer(0.1).minimize(loss)
     sess.run(tf.global_variables_initializer())
     for step in range(0, 1000):
         train_step.run()
-        if step % 10 == 0:
+        if step % 20 == 0:
             loss_value, content_loss_value, style_loss_value, input_value = sess.run(
                 [loss, content_loss_sum, style_loss_sum, input_middle])
             print(step, " content loss : ", content_loss_value, " style loss : ", style_loss_value," sum : ", loss_value)
-            if step % 30 == 0 :
+            if step % 40 == 0 :
                 print(input_value * 256)
             show_image(np.round(input_value * 256), step)
