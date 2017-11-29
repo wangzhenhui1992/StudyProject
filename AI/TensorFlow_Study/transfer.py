@@ -1,125 +1,106 @@
-# -*- utf-8 -*-
-
-import tensorflow as tf
+from PIL import Image
 import numpy as np
-from keras.applications.imagenet_utils import preprocess_input, decode_predictions
-from tensorflow.python.keras.applications.vgg16 import VGG16
-from tensorflow.python.keras.preprocessing import image
-from tensorflow.python.keras.models import Model
-from tensorflow.python.keras import backend as K
-import reader
+import tensorflow as tf
+import scipy.io as sio
+
+STYLE_WEIGHT = 1
+CONTENT_WEIGHT = 1
+STYLE_LAYERS = ['relu1_2', 'relu2_2', 'relu3_2']
+CONTENT_LAYERS = ['relu1_2']
+_vgg_params = None
 
 
-def weight_variable(shape):
-    print("exec weight_variable")
-    initial = tf.truncated_normal(shape, stddev=0.1,dtype=tf.float32)
-    return tf.Variable(initial)
+def vgg_params():
+    global _vgg_params
+    if _vgg_params is None:
+        _vgg_params = sio.loadmat('./vgg_16/imagenet-vgg-verydeep-19.mat')
+    return _vgg_params
 
 
-def load_img(img_path):
-    print("exec load_img")
-    img = image.load_img(img_path, target_size=(224, 224))  # 224×224
-    x = image.img_to_array(img)  # 三维(3, 224, 224)
-    x = np.expand_dims(x, axis=0)  # 四维(1, 3, 224, 224)
-    x = preprocess_input(x)
-    return x
+def vgg19(input_image):
+    layers = (
+        'conv1_1', 'relu1_1', 'conv1_2', 'relu1_2', 'pool1',
+        'conv2_1', 'relu2_1', 'conv2_2', 'relu2_2', 'pool2',
+        'conv3_1', 'relu3_1', 'conv3_2', 'relu3_2', 'conv3_3', 'relu3_3', 'conv3_4', 'relu3_4', 'pool3',
+        'conv4_1', 'relu4_1', 'conv4_2', 'relu4_2', 'conv4_3', 'relu4_3', 'conv4_4', 'relu4_4', 'pool4',
+        'conv5_1', 'relu5_1', 'conv5_2', 'relu5_2', 'conv5_3', 'relu5_3', 'conv5_4', 'relu5_4', 'pool5'
+    )
+
+    weights = vgg_params()['layers'][0]
+    net = input_image
+    network = {}
+    for i, name in enumerate(layers):
+        layer_type = name[:4]
+        if layer_type == 'conv':
+            kernels, bias = weights[i][0][0][0][0]
+            kernels = np.transpose(kernels, (1, 0, 2, 3))
+            conv = tf.nn.conv2d(net, tf.constant(kernels), strides=(1, 1, 1, 1), padding='SAME', name=name)
+            net = tf.nn.bias_add(conv, bias.reshape(-1))
+            net = tf.nn.relu(net)
+        elif layer_type == 'pool':
+            net = tf.nn.max_pool(net, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1), padding='SAME')
+        network[name] = net
+
+    return network
 
 
-def predict_layer(model, x):
-    print("exec predict_layer")
-    y_pred = model(x)
-    return y_pred
+def content_loss(target_features, content_features):
+    _, height, width, channel = map(lambda i: i.value, content_features.get_shape())
+    print('content_features.get_shape() : ')
+    print(content_features.get_shape())
+    content_size = height * width * channel
+    return tf.nn.l2_loss(target_features - content_features) / content_size
 
 
-def content_loss_layer(A, B):
-    print("exec content_loss_layer")
-    return tf.reduce_sum(tf.square(A - B))
+def style_loss(target_features, style_features):
+    _, height, width, channel = map(lambda i: i.value, target_features.get_shape())
+    print('target_features.get_shape() : ')
+    print(target_features.get_shape())
+    size = height * width * channel
+    target_features = tf.reshape(target_features, (-1, channel))
+    target_gram = tf.matmul(tf.transpose(target_features), target_features) / size
+
+    style_features = tf.reshape(style_features, (-1, channel))
+    style_gram = tf.matmul(tf.transpose(style_features), style_features) / size
+
+    return tf.nn.l2_loss(target_gram - style_gram) / size
 
 
-def predict(x):
-    print("exec predict")
-    block5_conv1 = predict_layer(block5_conv1_model, x)
-    block5_conv2 = predict_layer(block5_conv2_model, x)
-    block5_conv3 = predict_layer(block5_conv3_model, x)
+def loss_function(style_image, content_image, target_image):
+    style_features = vgg19([style_image])
+    content_features = vgg19([content_image])
+    target_features = vgg19([target_image])
+    loss = 0.0
+    for layer in CONTENT_LAYERS:
+        loss += CONTENT_WEIGHT * content_loss(target_features[layer], content_features[layer])
 
-    block5_conv1 = tf.transpose(tf.reshape(block5_conv1, shape=[14, 14, 512]), perm=[2, 0, 1])
-    block5_conv2 = tf.transpose(tf.reshape(block5_conv2, shape=[14, 14, 512]), perm=[2, 0, 1])
-    block5_conv3 = tf.transpose(tf.reshape(block5_conv3, shape=[14, 14, 512]), perm=[2, 0, 1])
+    for layer in STYLE_LAYERS:
+        loss += STYLE_WEIGHT * style_loss(target_features[layer], style_features[layer])
 
-    return block5_conv1, block5_conv2, block5_conv3
-
-
-def get_content_loss(A, B):
-    print("exec get_content_loss")
-    content_loss = 0.
-    for i in range(0, len(A) - 1):
-        content_loss += content_loss_layer(A[i], B[i])
-    print("content loss : ",content_loss)
-    return content_loss
-
-
-def gram(f1, f2):
-    return tf.multiply(f1, f2)
-
-
-def gram_layer(l1, l2):
-    l1_trans = tf.reshape(l1,shape=[512,14*14])
-    l2_trans = tf.reshape(l2,shape=[512,14*14])
-    g_1 =tf.reduce_sum(tf.matmul(l1_trans,tf.transpose(l2_trans,perm=[1,0])))
-    return g_1
-
-
-def get_style_loss(A, B):
-    print("exec get_style_loss")
-    style_loss = 0.
-    for i in range(0, 1):
-        style_loss += gram_layer(A[i], B[i])
-    print("content loss : ", style_loss)
-    return style_loss
-
-
-def get_loss():
-    print("exec get_loss")
-    predict_origin = predict(input_origin)
-    predict_middle = predict(input_middle)
-    predict_style = predict(input_style)
-    global afa_initial,beta_initial
-    loss = afa_initial * get_content_loss(predict_origin, predict_middle) + beta_initial * get_style_loss(predict_style,
-                                                                                                          predict_middle)
     return loss
 
 
-with tf.Session() as sess:
-    K.set_session(sess)
-    model = VGG16(weights='imagenet')
-    afa_initial = tf.Variable(np.random.rand())
-    beta_initial = tf.Variable(np.random.rand())
-    block5_conv1_model = Model(inputs=model.input, outputs=model.get_layer("block5_conv1").output)
-    block5_conv2_model = Model(inputs=model.input, outputs=model.get_layer("block5_conv2").output)
-    block5_conv3_model = Model(inputs=model.input, outputs=model.get_layer("block5_conv3").output)
+def stylize(style_image, content_image, learning_rate=0.1, epochs=500):
+    target = tf.Variable(tf.random_normal(content_image.shape), dtype=tf.float32)
+    style_input = tf.constant(style_image, dtype=tf.float32)
+    content_input = tf.constant(content_image, dtype=tf.float32)
+    cost = loss_function(style_input, content_input, target)
+    train_op = tf.train.AdamOptimizer(learning_rate).minimize(cost)
+    with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+        tf.initialize_all_variables().run()
+        for i in range(epochs):
+            _, loss, target_image = sess.run([train_op, cost, target])
+            print("iter:%d,loss:%.9f" % (i, loss))
+            if (i + 1) % 100 == 0:
+                image = np.clip(target_image + 128, 0, 255).astype(np.uint8)
+                Image.fromarray(image).save("./image/%d.jpg" % i)
 
-    input_origin = tf.placeholder(dtype=tf.float32, shape=[1, 224, 224, 3], name="input_origin")
-    input_style = tf.placeholder(dtype=tf.float32, shape=[1, 224, 224, 3], name="input_style")
 
-    w_t1 = weight_variable(shape=[224 * 224 * 3])
-    b_t1 = tf.Variable(tf.zeros(shape=[224 * 224 * 3], dtype=tf.float32))
-    out_1 = tf.multiply(tf.reshape(input_origin, shape=[224 * 224 * 3]), w_t1)
-    out_1 = tf.nn.relu(tf.add(out_1, b_t1))
-
-    w_t2 = weight_variable(shape=[224 * 224 * 3])
-    b_t2 = tf.Variable(tf.zeros(shape=[224 * 224 * 3], dtype=tf.float32))
-    out_2 = tf.multiply(tf.reshape(out_1, shape=[224 * 224 * 3]), w_t2)
-    out_2 = tf.nn.relu(tf.add(out_2, b_t2))
-    input_middle = tf.reshape(out_2, shape=[1, 224, 224, 3])
-    loss = get_loss()
-    print("exec get_loss finished")
-    train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
-    sess.run(tf.global_variables_initializer())
-    for step in range(0, 1000):
-        feed_dict = {
-            input_origin: reader.load_img(r"./data/dog.jpg"),
-            input_style: reader.load_img(r"./data/style.jpg")
-        }
-        print(step)
-        train_step.run(feed_dict=feed_dict)
-        print(sess.run(loss, feed_dict=feed_dict))
+if __name__ == '__main__':
+    style = Image.open('star.jpg')
+    style = np.array(style).astype(np.float32) - 128.0
+    content = Image.open('me.jpg')
+    content = np.array(content).astype(np.float32) - 128.0
+    stylize(style, content, 0.5, 500)
+    # print(content.shape)
+    # print(style.shape)
