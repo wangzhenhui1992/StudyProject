@@ -40,7 +40,6 @@ def vgg19(input_image):
         elif layer_type == 'pool':
             net = tf.nn.max_pool(net, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1), padding='SAME')
         network[name] = net
-
     return network
 
 
@@ -70,36 +69,41 @@ def loss_function(style_image, content_image, target_image):
     style_features = vgg19([style_image])
     content_features = vgg19([content_image])
     target_features = vgg19([target_image])
-    loss = 0.0
+    content_loss_sum = 0.
+    style_loss_sum = 0.
     for layer in CONTENT_LAYERS:
-        loss += CONTENT_WEIGHT * content_loss(target_features[layer], content_features[layer])
+        content_loss_sum += CONTENT_WEIGHT * content_loss(target_features[layer], content_features[layer])
 
     for layer in STYLE_LAYERS:
-        loss += STYLE_WEIGHT * style_loss(target_features[layer], style_features[layer])
+        style_loss_sum += STYLE_WEIGHT * style_loss(target_features[layer], style_features[layer])
 
-    return loss
+    return content_loss_sum , style_loss_sum
 
 
 def stylize(style_image, content_image, learning_rate=0.1, epochs=500):
     target = tf.Variable(tf.random_normal(content_image.shape), dtype=tf.float32)
     style_input = tf.constant(style_image, dtype=tf.float32)
     content_input = tf.constant(content_image, dtype=tf.float32)
-    cost = loss_function(style_input, content_input, target)
+    content_loss_sum , style_loss_sum = loss_function(style_input, content_input, target)
+    cost = content_loss_sum + style_loss_sum
     train_op = tf.train.AdamOptimizer(learning_rate).minimize(cost)
     with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         tf.initialize_all_variables().run()
         for i in range(epochs):
-            _, loss, target_image = sess.run([train_op, cost, target])
-            print("iter:%d,loss:%.9f" % (i, loss))
-            if (i + 1) % 100 == 0:
+            train_op.run()
+            if (i + 1) % 50 == 0:
+                loss, target_image ,c ,s = sess.run([ cost, target,content_loss_sum,style_loss_sum])
+                print("iter:%d,loss:%.9f" % (i, loss))
+                print(c ," ",s)
                 image = np.clip(target_image + 128, 0, 255).astype(np.uint8)
                 Image.fromarray(image).save("./image/%d.jpg" % i)
 
 
 if __name__ == '__main__':
-    style = Image.open('star.jpg')
+    tf.set_random_seed(1)
+    style = Image.open('./data/style.jpg')
     style = np.array(style).astype(np.float32) - 128.0
-    content = Image.open('me.jpg')
+    content = Image.open('./data/dog.jpg')
     content = np.array(content).astype(np.float32) - 128.0
     stylize(style, content, 0.5, 500)
     # print(content.shape)
