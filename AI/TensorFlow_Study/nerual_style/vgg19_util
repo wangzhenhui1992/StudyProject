@@ -1,0 +1,62 @@
+# -*- utf-8 -*-
+"""
+util to make a vgg19 model
+TODO load data from json which contains all weights of the vgg-19 network
+"""
+
+from tensorflow.python.keras.applications.vgg19 import VGG19
+from tensorflow.python.keras.layers import Conv2D, MaxPooling2D
+import tensorflow as tf
+
+model_vgg = None
+
+
+def get_vgg19(input, layer_name, session):
+    """
+    compute  output of a previous layer of vgg19
+    :param input:input data
+    :param layer_name: layer name
+    :param session: tensorflow session
+    :return:  output of a previous layer of vgg19
+    """
+    return get_vgg19_from_keras(input, layer_name, session)
+
+
+def get_vgg19_from_keras(input, layer_name, session):
+    """
+    compute  output of a previous layer of vgg19
+    :param input:
+    :param layer_name:
+    :param session:
+    :return: output of a previous layer of vgg19
+    """
+    global model_vgg
+    if model_vgg is None:
+        load_vgg_19_from_keras()
+    x = input
+    for l in model_vgg.layers:
+        if isinstance(l, Conv2D):
+            weights = l.weights
+            kernel = session.run(weights[0])
+            bias = session.run(weights[1])
+            kernel_tensor = tf.constant(kernel)
+            bias_tensor = tf.constant(bias)
+            x = tf.nn.conv2d(x, filter=kernel_tensor, padding="SAME", strides=(1, 1, 1, 1))
+            x = tf.add(x, bias_tensor)
+        elif isinstance(l, MaxPooling2D):
+            x = tf.nn.max_pool(x, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1), padding="SAME")
+        if l.name == layer_name:
+            break
+    return x
+
+
+def load_vgg_19_from_keras():
+    """
+    load vgg19 model from keras pre-trained model
+    :return: None
+    """
+    global model_vgg
+    model_vgg = VGG19(weights='imagenet')
+    model_vgg.trainable = False
+    for l in model_vgg.layers:
+        l.trainable = False
