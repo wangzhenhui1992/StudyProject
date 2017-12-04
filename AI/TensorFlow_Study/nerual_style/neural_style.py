@@ -7,8 +7,8 @@ from CNN.neural_style import vgg19_util
 from CNN.neural_style import loss_util
 from CNN.neural_style import image_util
 
-CONTENT_LAYERS = ['block3_conv2']
-STYLE_LAYERS = ['block1_conv2', "block2_conv2", "block3_conv2"]
+CONTENT_LAYERS = ['block4_conv2']
+STYLE_LAYERS = ["block2_conv2", "block3_conv2", "block4_conv2"]
 CONTENT_RATE = 1.
 STYLE_RATE = 0.1
 LEARNING_RATE = 0.5
@@ -67,14 +67,16 @@ def train(input_content, input_style):
     with tf.name_scope("loss"):
         loss = tf.add(content_loss_sum, style_loss_sum, name="loss")
         tf.summary.scalar("loss", loss)
-
-    train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss=loss, var_list=[input_middle])
+    global_step = tf.Variable(0)
+    decayed_learning_rate = tf.train.exponential_decay(learning_rate=LEARNING_RATE, global_step=global_step,
+                                                       decay_rate=0.95, staircase=True, decay_steps=100)
+    train_step = tf.train.AdamOptimizer(decayed_learning_rate).minimize(loss=loss, var_list=[input_middle])
     saver = tf.train.Saver()
     merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter('./log', session.graph)
     session.run(tf.global_variables_initializer())
     for step in range(0, STEP_SUM):
-        _, summary = session.run([train_step, merged])
+        _, summary = session.run([train_step, merged], feed_dict={global_step: step})
         writer.add_summary(summary, step)
         if step % 10 == 0:
             loss_value, content_loss_value, style_loss_value, input_value = session.run(
@@ -95,4 +97,4 @@ def transfer(content_image_path, style_image_path):
 
 
 if __name__ == '__main__':
-    transfer(content_image_path=r"./input/skytree.jpg", style_image_path=r"./input/style2.jpg")
+    transfer(content_image_path=r"./input/building.jpg", style_image_path=r"./input/star.jpg")
