@@ -20,29 +20,25 @@ VGG19_LAYERS = [
 ]
 
 
-def get_vgg19(input_data, layer_name):
+def get_vgg19(input_data):
     """
     compute  output of a previous layer of vgg19
-    :param input:input data
-    :param layer_name: layer name
-    :param session: tensorflow session
+    :param input_data:input data
     :return:  output of a previous layer of vgg19
     """
-    print("load vgg19 net from head to %s" % layer_name)
-    return get_vgg19_from_json(input_data, layer_name)
+    return get_vgg19_from_keras(input_data)
 
 
-def get_vgg19_from_keras(input_data, layer_name):
+def get_vgg19_from_keras(input_data):
     """
     compute  output of a previous layer of vgg19
-    :param input:
-    :param layer_name:
-    :param session:
+    :param input_data:
     :return: output of a previous layer of vgg19
     """
     global model_vgg
     if model_vgg is None:
         load_vgg19_from_keras()
+    vgg19 = {}
     x = input_data
     for l in model_vgg.layers:
         if isinstance(l, Conv2D):
@@ -50,11 +46,11 @@ def get_vgg19_from_keras(input_data, layer_name):
             x = tf.nn.conv2d(x, filter=kernel_tensor, padding="SAME", strides=(1, 1, 1, 1))
             x = tf.nn.bias_add(x, bias_tensor)
             x = tf.nn.relu(x)
+            vgg19[l.name] = x
         elif isinstance(l, MaxPooling2D):
             x = tf.nn.max_pool(x, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1), padding="SAME")
-        if l.name == layer_name:
-            break
-    return x
+            vgg19[l.name] = x
+    return vgg19
 
 
 def load_vgg19_from_keras():
