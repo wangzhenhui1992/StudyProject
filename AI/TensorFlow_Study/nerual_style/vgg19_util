@@ -7,11 +7,20 @@ TODO load data from json which contains all weights of the vgg-19 network
 from tensorflow.python.keras.applications.vgg19 import VGG19
 from tensorflow.python.keras.layers import Conv2D, MaxPooling2D
 import tensorflow as tf
+import json
 
 model_vgg = None
+data_json = None
+VGG19_LAYERS = [
+    'block1_conv1', 'block1_conv2', 'block1_pool',
+    'block2_conv1', 'block2_conv2', 'block2_pool',
+    'block3_conv1', 'block3_conv2', 'block3_conv3', 'block3_conv4', 'block3_pool',
+    'block4_conv1', 'block4_conv2', 'block4_conv3', 'block4_conv4', 'block4_pool',
+    'block5_conv1', 'block5_conv2', 'block5_conv3', 'block5_conv4', 'block5_pool'
+]
 
 
-def get_vgg19(input, layer_name, session):
+def get_vgg19(input_data, layer_name):
     """
     compute  output of a previous layer of vgg19
     :param input:input data
@@ -19,10 +28,11 @@ def get_vgg19(input, layer_name, session):
     :param session: tensorflow session
     :return:  output of a previous layer of vgg19
     """
-    return get_vgg19_from_keras(input, layer_name, session)
+    print("load vgg19 net from head to %s" % layer_name)
+    return get_vgg19_from_json(input_data, layer_name)
 
 
-def get_vgg19_from_keras(input, layer_name, session):
+def get_vgg19_from_keras(input_data, layer_name):
     """
     compute  output of a previous layer of vgg19
     :param input:
@@ -32,17 +42,14 @@ def get_vgg19_from_keras(input, layer_name, session):
     """
     global model_vgg
     if model_vgg is None:
-        load_vgg_19_from_keras()
-    x = input
+        load_vgg19_from_keras()
+    x = input_data
     for l in model_vgg.layers:
         if isinstance(l, Conv2D):
-            weights = l.weights
-            kernel = session.run(weights[0])
-            bias = session.run(weights[1])
-            kernel_tensor = tf.constant(kernel)
-            bias_tensor = tf.constant(bias)
+            kernel_tensor, bias_tensor = l.weights
             x = tf.nn.conv2d(x, filter=kernel_tensor, padding="SAME", strides=(1, 1, 1, 1))
-            x = tf.add(x, bias_tensor)
+            x = tf.nn.bias_add(x, bias_tensor)
+            x = tf.nn.relu(x)
         elif isinstance(l, MaxPooling2D):
             x = tf.nn.max_pool(x, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1), padding="SAME")
         if l.name == layer_name:
@@ -50,13 +57,65 @@ def get_vgg19_from_keras(input, layer_name, session):
     return x
 
 
-def load_vgg_19_from_keras():
+def load_vgg19_from_keras():
     """
     load vgg19 model from keras pre-trained model
     :return: None
     """
+    print("load vgg19 from keras")
     global model_vgg
     model_vgg = VGG19(weights='imagenet')
     model_vgg.trainable = False
     for l in model_vgg.layers:
         l.trainable = False
+
+
+def load_vgg19_from_json():
+    print("load vgg19 from json")
+    with open("./config/vgg19_weight.json", "r") as file:
+        global data_json
+        data_json = json.load(file)
+
+
+def get_vgg19_from_json(input_data, layer_name):
+    global data_json
+    if data_json is None:
+        load_vgg19_from_json()
+    x = input_data
+    for name in VGG19_LAYERS:
+        if name[7:11] == "conv":
+            kernel_tensor = tf.constant(data_json[name + "_weights"])
+            bias_tensor = tf.constant(data_json[name + "_bias"])
+            x = tf.nn.conv2d(x, filter=kernel_tensor, padding="SAME", strides=(1, 1, 1, 1))
+            x = tf.nn.bias_add(x, bias_tensor)
+            x = tf.nn.relu(x)
+        elif name[7:11] == "pool":
+            x = tf.nn.max_pool(x, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1), padding="SAME")
+        if layer_name == name:
+            break
+    return x
+
+
+def write_vgg19_to_json():
+    load_vgg19_from_keras()
+    data = {}
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        for l in model_vgg.layers:
+            if isinstance(l, Conv2D):
+                weights, bias = sess.run(l.weights)
+                data[l.name + "_weights"] = weights.tolist()
+                data[l.name + "_bias"] = bias.tolist()
+
+    with open("./config/vgg19_weight.json", "w") as file:
+        json.dump(data, file, ensure_ascii=False)
+
+
+def main():
+    write_vgg19_to_json()
+
+
+if __name__ == "__main__":
+    # replace the main() by pass to avoid rewriting by mistake
+    # main()
+    pass
