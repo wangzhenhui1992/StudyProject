@@ -7,10 +7,10 @@ from CNN.neural_style import vgg19_util
 from CNN.neural_style import loss_util
 from CNN.neural_style import image_util
 
-CONTENT_LAYERS = ['block4_conv2']
-STYLE_LAYERS = ["block2_conv2", "block3_conv2", "block4_conv2"]
+CONTENT_LAYERS = ['block5_conv2']
+STYLE_LAYERS = ["block1_conv2", "block2_conv2", "block3_conv2", "block4_conv2"]
 CONTENT_RATE = 1.
-STYLE_RATE = 0.1
+STYLE_RATE = 1
 LEARNING_RATE = 0.5
 STEP_SUM = 20000
 
@@ -25,8 +25,8 @@ def get_feature(layer_name, input_content_or_style, middle, session):
     :return: Features
     """
 
-    content_or_style_feature = vgg19_util.get_vgg19(input_content_or_style, layer_name, session)
-    middle_feature_output = vgg19_util.get_vgg19(middle, layer_name, session)
+    content_or_style_feature = vgg19_util.get_vgg19(input_content_or_style, layer_name)
+    middle_feature_output = vgg19_util.get_vgg19(middle, layer_name)
     return content_or_style_feature, middle_feature_output
 
 
@@ -55,15 +55,16 @@ def train(input_content, input_style):
     # compute content loss
     for name in CONTENT_LAYERS:
         content_feature, middle_feature = get_feature(name, input_content, input_middle, session)
-        content_loss = loss_util.get_content_loss(middle_feature, content_feature)
-        content_loss_sum += content_loss * CONTENT_RATE
+        content_loss = loss_util.get_content_loss(middle_feature, content_feature) * CONTENT_RATE
+        with tf.name_scope("loss"):
+            content_loss_sum = tf.add(content_loss_sum, content_loss, name="content_loss_sum")
 
     # compute content style
     for name in STYLE_LAYERS:
         style_feature, middle_feature = get_feature(name, input_style, input_middle, session)
-        style_loss = loss_util.get_style_loss(middle_feature, style_feature)
-        style_loss_sum += style_loss * STYLE_RATE
-
+        style_loss = loss_util.get_style_loss(middle_feature, style_feature) * STYLE_RATE
+        with tf.name_scope("loss"):
+            style_loss_sum = tf.add(style_loss_sum, style_loss, name="style_loss_sum")
     with tf.name_scope("loss"):
         loss = tf.add(content_loss_sum, style_loss_sum, name="loss")
         tf.summary.scalar("loss", loss)
@@ -96,5 +97,9 @@ def transfer(content_image_path, style_image_path):
     train(input_content, input_style)
 
 
-if __name__ == '__main__':
+def main():
     transfer(content_image_path=r"./input/building.jpg", style_image_path=r"./input/star.jpg")
+
+
+if __name__ == '__main__':
+    main()
