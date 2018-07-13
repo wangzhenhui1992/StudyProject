@@ -1,0 +1,96 @@
+>> 原文发布在个人博客上 http://www.soaringroad.com/?p=1073
+
+### 混淆矩阵
+
+混淆矩阵也被称作误差矩阵，使用行数和列数相同的矩阵来表示模型的精度。
+
+以二分类模型为例，混淆矩阵如下
+
+<table>
+  <thead>
+    <tr>
+      <th>
+      </th>
+      
+      <th align="center">
+        Positive
+      </th>
+      
+      <th align="right">
+        Negative
+      </th>
+    </tr>
+  </thead>
+  
+  <tbody>
+    <tr>
+      <td>
+        True
+      </td>
+      
+      <td align="center">
+        TP
+      </td>
+      
+      <td align="right">
+        TN
+      </td>
+    </tr>
+    
+    <tr>
+      <td>
+        False
+      </td>
+      
+      <td align="center">
+        FP
+      </td>
+      
+      <td align="right">
+        FN
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+### Positive和Negative
+
+表示判断为正样本和负样本
+
+### True和False
+
+表示判断正确和错误
+
+### TP
+
+真阳，表示判断为正样本且判断正确的数量，即样本实际值=判断值=正样本
+
+### TN
+
+真阴，表示判断为负样本且判断正确的数量,即样本实际值=判断值=负样本
+
+### FP
+
+假阳，表示判断为正样本且判断错误的数量,即样本实际值=负样本，判断值=正样本
+
+### FN
+
+假阴，表示判断为负样本且判断错误的数量，即样本实际值=正样本，判断值=负样本
+
+### Accuracy
+
+准确率,判断正确的样本数占总样本数的百分比，即`(TP+TN)/(TP+TN+FP+FN)`
+
+### Recall
+
+召回率,判断为正样本且判断正确的数量占实际正样本总数的百分比，即`TP/(TP+FN)`
+
+### Precision
+
+精准率，判断为正样本且判断正确的数量占判断为正样本数量的百分比，即`TP/(TP+FP)`
+
+通过误差矩阵，可以计算出F1,AUC,ROC等等评价指标，用以评价模型的表现。
+
+[F-Score][1]
+
+ [1]: http://www.soaringroad.com/?p=1056
