@@ -6,52 +6,10 @@
 
 以二分类模型为例，混淆矩阵如下
 
-<table>
-  <thead>
-    <tr>
-      <th>
-      </th>
-      
-      <th align="center">
-        Positive
-      </th>
-      
-      <th align="right">
-        Negative
-      </th>
-    </tr>
-  </thead>
-  
-  <tbody>
-    <tr>
-      <td>
-        True
-      </td>
-      
-      <td align="center">
-        TP
-      </td>
-      
-      <td align="right">
-        TN
-      </td>
-    </tr>
-    
-    <tr>
-      <td>
-        False
-      </td>
-      
-      <td align="center">
-        FP
-      </td>
-      
-      <td align="right">
-        FN
-      </td>
-    </tr>
-  </tbody>
-</table>
+|  | Positive | Negative | 
+| - | :-: | -: | 
+| True | TP| TN | 
+| False | FP | FN | 
 
 ### Positive和Negative
 
