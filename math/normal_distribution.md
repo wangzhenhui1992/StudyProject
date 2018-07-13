@@ -1,3 +1,4 @@
+>> 原文发布在个人博客上  http://www.soaringroad.com/?p=1070
 
 ### 正态分布
 
